@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:////app/data/travel_planner.db
+      - API_USERNAME=admin
+      - API_PASSWORD=travelsecret
+      - ART_API_BASE_URL=https://api.artic.edu/api/v1
+      - CACHE_TTL_SECONDS=300
+    volumes:
+      - db_data:/app/data
+    restart: always
+
+volumes:
+  db_data:
