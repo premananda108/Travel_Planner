@@ -21,12 +21,18 @@ async def lifespan(app: FastAPI):
     yield
     # Teardown: (Optional cleanups here)
 
+from fastapi.responses import RedirectResponse
+
 app = FastAPI(
     title="Travel Planner API",
     description="A CRUD API to help travellers plan trips, manage projects, import places from the Art Institute of Chicago, and attach notes.",
     version="1.0.0",
     lifespan=lifespan
 )
+
+@app.get("/", include_in_schema=False)
+async def redirect_to_docs():
+    return RedirectResponse(url="/docs")
 
 # Protect all routes under this router with Basic Authentication
 api_router = APIRouter(
