@@ -123,6 +123,15 @@ async def test_create_project_with_places_validation(client):
     assert res.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert "Duplicate external place IDs" in res.text
 
+    # 4. Too few places (<1)
+    payload = {
+        "name": "Empty Tour",
+        "places": []
+    }
+    res = await client.post("/api/projects/with-places", json=payload, auth=AUTH)
+    assert res.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert "at least 1 item" in res.text
+
 
 # --- ADD PLACES & LIMITS ---
 
@@ -157,6 +166,37 @@ async def test_add_place_to_existing_project(client):
     res = await client.post(f"/api/projects/{proj_id}/places", json={"external_id": "3000"}, auth=AUTH)
     assert res.status_code == status.HTTP_400_BAD_REQUEST
     assert "maximum limit of 10 places" in res.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_get_places_for_project(client):
+    """Test retrieving all places and a single place within a project."""
+    # Create a project with places
+    payload = {
+        "name": "Read Places Tour",
+        "places": ["1001", "1002"]
+    }
+    res = await client.post("/api/projects/with-places", json=payload, auth=AUTH)
+    proj_id = res.json()["id"]
+    place1_id = res.json()["places"][0]["id"]
+
+    # 1. List all places for the project
+    res = await client.get(f"/api/projects/{proj_id}/places", auth=AUTH)
+    assert res.status_code == status.HTTP_200_OK
+    data = res.json()
+    assert len(data) == 2
+    assert data[0]["external_id"] == "1001"
+    assert data[1]["external_id"] == "1002"
+
+    # 2. Get a single place within the project
+    res = await client.get(f"/api/projects/{proj_id}/places/{place1_id}", auth=AUTH)
+    assert res.status_code == status.HTTP_200_OK
+    assert res.json()["external_id"] == "1001"
+    assert res.json()["id"] == place1_id
+
+    # 3. Try to get a non-existent place
+    res = await client.get(f"/api/projects/{proj_id}/places/999999", auth=AUTH)
+    assert res.status_code == status.HTTP_404_NOT_FOUND
 
 
 # --- PLACE UPDATES & COMPLETENESS LOGIC ---
