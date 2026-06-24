@@ -67,7 +67,7 @@ async def fetch_artwork_from_api(artwork_id: str) -> Dict[str, Any]:
             artwork_data = data.get("data")
             if not artwork_data:
                 raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail=f"External API returned empty data for artwork ID '{artwork_id}'."
                 )
 

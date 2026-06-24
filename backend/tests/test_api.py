@@ -111,7 +111,7 @@ async def test_create_project_with_places_validation(client):
         "places": [str(i) for i in range(1, 12)]
     }
     res = await client.post("/api/projects/with-places", json=payload, auth=AUTH)
-    assert res.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert res.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert "between 1 and 10 places" in res.text
 
     # 3. Duplicate places in creation request
@@ -120,7 +120,7 @@ async def test_create_project_with_places_validation(client):
         "places": ["1001", "1001"]
     }
     res = await client.post("/api/projects/with-places", json=payload, auth=AUTH)
-    assert res.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert res.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert "Duplicate external place IDs" in res.text
 
 
