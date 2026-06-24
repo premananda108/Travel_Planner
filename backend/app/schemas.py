@@ -33,19 +33,16 @@ class ProjectBase(BaseModel):
     start_date: Optional[date] = Field(None, description="Optional start date of the project")
 
 class ProjectCreate(ProjectBase):
-    places: Optional[List[str]] = Field(
-        None,
-        description="Optional list of external place IDs to import. If provided, must contain 1 to 10 unique items."
+    places: List[str] = Field(
+        ...,
+        min_length=1,
+        max_length=10,
+        description="List of external place IDs to import. Must contain 1 to 10 unique items."
     )
 
     @field_validator("places")
     @classmethod
-    def validate_places_limit_and_uniqueness(cls, v: Optional[List[str]]) -> Optional[List[str]]:
-        if v is None:
-            return v
-        if not (1 <= len(v) <= 10):
-            raise ValueError("If places are provided, a project must contain between 1 and 10 places.")
-        
+    def validate_places_limit_and_uniqueness(cls, v: List[str]) -> List[str]:
         # Check for duplicates in the list
         if len(v) != len(set(v)):
             raise ValueError("Duplicate external place IDs in request are not allowed.")

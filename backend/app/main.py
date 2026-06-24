@@ -48,25 +48,21 @@ async def create_project(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Create a travel project.
-    Optionally imports an array of places from the Art Institute of Chicago API in the same request.
+    Create a travel project with a list of imported places in a single request.
+    Validates that each external place exists in the Art Institute of Chicago API.
     """
-    if project_data.places:
-        places_to_import = []
-        for ext_id in project_data.places:
-            # Validate place exists in external API (utilizes caching internally)
-            artwork_details = await services.fetch_artwork_from_api(ext_id)
-            places_to_import.append(artwork_details)
+    places_to_import = []
+    for ext_id in project_data.places:
+        # Validate place exists in external API (utilizes caching internally)
+        artwork_details = await services.fetch_artwork_from_api(ext_id)
+        places_to_import.append(artwork_details)
 
-        # Delegate to CRUD to create project and bulk-insert places
-        return await crud.create_project_with_places(
-            db=db,
-            project=project_data,
-            places_data=places_to_import
-        )
-    
-    # Create empty project
-    return await crud.create_project(db, project_data)
+    # Delegate to CRUD to create project and bulk-insert places
+    return await crud.create_project_with_places(
+        db=db,
+        project=project_data,
+        places_data=places_to_import
+    )
 
 
 @api_router.get("/projects", response_model=List[schemas.ProjectOut])
@@ -250,6 +246,12 @@ async def delete_place_from_project(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Place with ID {place_id} does not exist in Project {project_id}."
+        )
+
+    if len(db_project.places) <= 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot remove the last place from a project. A project must contain at least 1 place."
         )
 
     await crud.delete_place_from_project(db, db_place)

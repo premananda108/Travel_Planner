@@ -178,6 +178,17 @@ async def update_place_in_project(
 
 async def delete_place_from_project(db: AsyncSession, db_place: Place) -> None:
     project_id = db_place.project_id
+    
+    # Load all places for this project to check count
+    result = await db.execute(select(Place).filter(Place.project_id == project_id))
+    places = list(result.scalars().all())
+
+    if len(places) <= 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot remove the last place from a project. A project must contain at least 1 place."
+        )
+
     await db.delete(db_place)
     await db.commit()
 

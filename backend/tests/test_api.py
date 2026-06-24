@@ -24,23 +24,24 @@ async def test_auth_required(client):
     assert res.status_code == status.HTTP_200_OK
 
 
-# --- PROJECT CRUD TESTS (EMPTY CREATION) ---
+# --- PROJECT CRUD TESTS ---
 
 @pytest.mark.asyncio
-async def test_project_crud_empty(client):
-    """Test standard project lifecycle with empty creation (no initial places)."""
-    # 1. Create empty project
+async def test_project_crud(client):
+    """Test standard project lifecycle (create with places, read, update, delete)."""
+    # 1. Create project (requires places)
     payload = {
         "name": "European Tour",
         "description": "Visiting capitals in Europe",
-        "start_date": "2026-07-01"
+        "start_date": "2026-07-01",
+        "places": ["1001"]
     }
     res = await client.post("/api/projects", json=payload, auth=AUTH)
     assert res.status_code == status.HTTP_201_CREATED
     data = res.json()
     assert data["name"] == "European Tour"
     assert data["is_completed"] is False
-    assert len(data["places"]) == 0
+    assert len(data["places"]) == 1
     project_id = data["id"]
 
     # 2. Get single project
@@ -66,7 +67,7 @@ async def test_project_crud_empty(client):
     assert res.status_code == status.HTTP_200_OK
     assert len(res.json()) == 1
 
-    # 5. Delete empty project
+    # 5. Delete project (place 1001 is unvisited, so deletion should succeed)
     res = await client.delete(f"/api/projects/{project_id}", auth=AUTH)
     assert res.status_code == status.HTTP_204_NO_CONTENT
 
@@ -114,7 +115,7 @@ async def test_create_project_validation(client):
     }
     res = await client.post("/api/projects", json=payload, auth=AUTH)
     assert res.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
-    assert "between 1 and 10 places" in res.text
+    assert "at most 10 items" in res.text
 
     # 3. Duplicate places in creation request
     payload = {
@@ -125,14 +126,22 @@ async def test_create_project_validation(client):
     assert res.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert "Duplicate external place IDs" in res.text
 
-    # 4. If places list is provided, it cannot be empty (min 1 place)
+    # 4. Empty places array (violates min_length=1)
     payload = {
         "name": "Empty Tour",
         "places": []
     }
     res = await client.post("/api/projects", json=payload, auth=AUTH)
     assert res.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
-    assert "between 1 and 10 places" in res.text
+    assert "at least 1 item" in res.text
+
+    # 5. Missing places field completely
+    payload = {
+        "name": "No Places Tour"
+    }
+    res = await client.post("/api/projects", json=payload, auth=AUTH)
+    assert res.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert "Field required" in res.text
 
 
 # --- ADD PLACES & LIMITS ---
@@ -140,18 +149,22 @@ async def test_create_project_validation(client):
 @pytest.mark.asyncio
 async def test_add_place_to_existing_project(client):
     """Test adding places to an existing project and enforcing limits/uniqueness."""
-    # Create empty project
-    res = await client.post("/api/projects", json={"name": "Vacation"}, auth=AUTH)
+    # Create project (starts with place 2001)
+    res = await client.post(
+        "/api/projects",
+        json={"name": "Vacation", "places": ["2001"]},
+        auth=AUTH
+    )
     proj_id = res.json()["id"]
 
-    # 1. Add valid place
-    res = await client.post(f"/api/projects/{proj_id}/places", json={"external_id": "2001"}, auth=AUTH)
+    # 1. Add valid place (2002)
+    res = await client.post(f"/api/projects/{proj_id}/places", json={"external_id": "2002"}, auth=AUTH)
     assert res.status_code == status.HTTP_201_CREATED
-    assert res.json()["external_id"] == "2001"
-    assert res.json()["title"] == "Mock Artwork 2001"
+    assert res.json()["external_id"] == "2002"
+    assert res.json()["title"] == "Mock Artwork 2002"
 
     # 2. Add duplicate place (should fail)
-    res = await client.post(f"/api/projects/{proj_id}/places", json={"external_id": "2001"}, auth=AUTH)
+    res = await client.post(f"/api/projects/{proj_id}/places", json={"external_id": "2002"}, auth=AUTH)
     assert res.status_code == status.HTTP_400_BAD_REQUEST
     assert "already added" in res.json()["detail"]
 
@@ -159,8 +172,8 @@ async def test_add_place_to_existing_project(client):
     res = await client.post(f"/api/projects/{proj_id}/places", json={"external_id": "invalid"}, auth=AUTH)
     assert res.status_code == status.HTTP_404_NOT_FOUND
 
-    # 4. Fill project up to 10 places (we have 2001, add 9 more: 2002-2010)
-    for idx in range(2, 11):
+    # 4. Fill project up to 10 places (we have 2001, 2002 already, so add 8 more: 2003-2010)
+    for idx in range(3, 11):
         res = await client.post(f"/api/projects/{proj_id}/places", json={"external_id": str(2000 + idx)}, auth=AUTH)
         assert res.status_code == status.HTTP_201_CREATED
     
@@ -207,7 +220,7 @@ async def test_get_places_for_project(client):
 async def test_completeness_and_deletion_rules(client):
     """
     Test calculations for project completion and rules prohibiting
-    deletion of projects containing visited places.
+    deletion of projects containing visited places or deleting the last place.
     """
     # 1. Create a project with 2 places
     res = await client.post(
@@ -285,21 +298,17 @@ async def test_completeness_and_deletion_rules(client):
     res = await client.get(f"/api/projects/{proj_id}", auth=AUTH)
     assert res.json()["is_completed"] is True
 
-    # 8. Delete place2 (leaving only place1). This is allowed since empty/single states are valid.
+    # 8. Try deleting place2 (leaving only place1). This is allowed since total > 1.
     res = await client.delete(
         f"/api/projects/{proj_id}/places/{place2['id']}",
         auth=AUTH
     )
     assert res.status_code == status.HTTP_204_NO_CONTENT
 
-    # 9. Delete the last remaining place (place1). The project is now empty (0 places).
+    # 9. Try deleting the last remaining place (place1) - should fail with 400 Bad Request
     res = await client.delete(
         f"/api/projects/{proj_id}/places/{place1['id']}",
         auth=AUTH
     )
-    assert res.status_code == status.HTTP_204_NO_CONTENT
-
-    # Verify project is empty and is_completed is False (no places)
-    res = await client.get(f"/api/projects/{proj_id}", auth=AUTH)
-    assert res.json()["is_completed"] is False
-    assert len(res.json()["places"]) == 0
+    assert res.status_code == status.HTTP_400_BAD_REQUEST
+    assert "Cannot remove the last place" in res.json()["detail"]

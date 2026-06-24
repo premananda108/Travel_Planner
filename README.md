@@ -16,6 +16,13 @@ A backend CRUD application built with **FastAPI**, **SQLAlchemy (async)**, and *
 - **Testing**: Over 95%+ test coverage using `pytest` and `pytest-asyncio` with an in-memory SQLite database.
 - **Postman Collection**: Pre-configured JSON collection file for endpoint exploration.
 
+### Business Rules
+- **Minimum & Maximum Limit**: A project must always contain between 1 and 10 places.
+- **Mandatory Places at Creation**: Creating a project without places is not allowed; the creation payload must specify between 1 and 10 places.
+- **Last Place Deletion Lock**: Removing the last remaining place from a project is not allowed.
+- **Visited Project Deletion Lock**: A project cannot be deleted if any of its places have been marked as visited.
+- **Project Completion**: When all places in a project are marked as visited, the project status automatically updates to `is_completed=True`. If a new place is added, the status resets to `False`.
+
 ---
 
 ## Tech Stack
@@ -80,7 +87,7 @@ pip install -r requirements.txt
 
 ### 2. Configure Environment Variables
 Create a `.env` file in the `backend/` directory or run with default environment values.
-Supported configurations (defined in [config.py](file:///Users/premananda/travel/backend/app/config.py)):
+Supported configurations (defined in [config.py](./backend/app/config.py)):
 
 | Variable | Default Value | Description |
 | :--- | :--- | :--- |
@@ -156,7 +163,7 @@ Default credentials:
 ## Postman Collection
 
 A complete Postman collection is supplied to test and explore the API.
-File location: [Travel_Planner.postman_collection.json](file:///Users/premananda/travel/postman/Travel_Planner.postman_collection.json).
+File location: [Travel_Planner.postman_collection.json](./postman/Travel_Planner.postman_collection.json).
 
 ### How to use:
 1. Open Postman.

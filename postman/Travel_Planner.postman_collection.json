@@ -64,6 +64,34 @@
           "response": []
         },
         {
+          "name": "Create Project (Fails - Missing places)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"No Places Tour\",\n  \"description\": \"This request should fail because places is missing\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/projects",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "projects"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
           "name": "Create Project",
           "request": {
             "method": "POST",
@@ -320,6 +348,28 @@
                 "{{place_id}}"
               ]
             }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Last Place (Fails - Min 1 place required)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{project_id}}/places/{{place_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "projects",
+                "{{project_id}}",
+                "places",
+                "{{place_id}}"
+              ]
+            },
+            "description": "Fails if attempting to delete the last place in a project, as a project must always contain at least 1 place."
           },
           "response": []
         }
