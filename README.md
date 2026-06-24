@@ -138,8 +138,7 @@ Default credentials:
 ### Summary of Endpoints
 
 #### Projects:
-- `POST /api/projects`: Create a project.
-- `POST /api/projects/with-places`: Create a project with an array of imported place IDs.
+- `POST /api/projects`: Create a project (optionally includes an array of 1 to 10 imported place IDs).
 - `GET /api/projects`: List projects (supports pagination `skip` & `limit` and filtering `is_completed`).
 - `GET /api/projects/{project_id}`: Get project details (and its places).
 - `PUT /api/projects/{project_id}`: Update project details (Name, Description, Start Date).

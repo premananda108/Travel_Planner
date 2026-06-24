@@ -44,38 +44,29 @@ api_router = APIRouter(
 
 @api_router.post("/projects", response_model=schemas.ProjectOut, status_code=status.HTTP_201_CREATED)
 async def create_project(
-    project: schemas.ProjectCreate,
-    db: AsyncSession = Depends(get_db)
-):
-    """Create a travel project in the system (without initial places)."""
-    return await crud.create_project(db, project)
-
-
-@api_router.post("/projects/with-places", response_model=schemas.ProjectOut, status_code=status.HTTP_201_CREATED)
-async def create_project_with_places(
-    project_data: schemas.ProjectCreateWithPlaces,
+    project_data: schemas.ProjectCreate,
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Create a project with a list of imported places in a single request.
-    Validates that each external place exists in the Art Institute of Chicago API.
+    Create a travel project.
+    Optionally imports an array of places from the Art Institute of Chicago API in the same request.
     """
-    places_to_import = []
-    for ext_id in project_data.places:
-        # Validate place exists in external API (utilizes caching internally)
-        artwork_details = await services.fetch_artwork_from_api(ext_id)
-        places_to_import.append(artwork_details)
+    if project_data.places:
+        places_to_import = []
+        for ext_id in project_data.places:
+            # Validate place exists in external API (utilizes caching internally)
+            artwork_details = await services.fetch_artwork_from_api(ext_id)
+            places_to_import.append(artwork_details)
 
-    # Delegate to CRUD to create project and bulk-insert places
-    return await crud.create_project_with_places(
-        db=db,
-        project=schemas.ProjectCreate(
-            name=project_data.name,
-            description=project_data.description,
-            start_date=project_data.start_date
-        ),
-        places_data=places_to_import
-    )
+        # Delegate to CRUD to create project and bulk-insert places
+        return await crud.create_project_with_places(
+            db=db,
+            project=project_data,
+            places_data=places_to_import
+        )
+    
+    # Create empty project
+    return await crud.create_project(db, project_data)
 
 
 @api_router.get("/projects", response_model=List[schemas.ProjectOut])
@@ -244,12 +235,23 @@ async def delete_place_from_project(
     db: AsyncSession = Depends(get_db)
 ):
     """Remove a place from a project. Completeness state will be automatically re-evaluated."""
-    db_place = await crud.get_place_by_id(db, project_id, place_id)
+    db_project = await crud.get_project(db, project_id)
+    if not db_project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Project with ID {project_id} not found."
+        )
+    
+    # Refresh relationship to sync with the database and avoid cached session states
+    await db.refresh(db_project, ["places"])
+        
+    db_place = next((p for p in db_project.places if p.id == place_id), None)
     if not db_place:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Place with ID {place_id} does not exist in Project {project_id}."
         )
+
     await crud.delete_place_from_project(db, db_place)
     return None
 

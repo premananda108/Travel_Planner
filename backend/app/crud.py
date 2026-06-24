@@ -1,6 +1,6 @@
 from datetime import date
 from typing import Optional
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status
 from app.models import Project, Place
@@ -17,14 +17,13 @@ async def recalculate_project_completeness(db: AsyncSession, project_id: int) ->
 
     is_completed = len(places) > 0 and all(p.is_visited for p in places)
 
-    # Update project
-    proj_result = await db.execute(select(Project).filter(Project.id == project_id))
-    project = proj_result.scalar_one_or_none()
-    if project:
-        project.is_completed = is_completed
-        db.add(project)
-        await db.commit()
-        await db.refresh(project)
+    # Update project directly without fetching it to avoid relationship cascading issues
+    await db.execute(
+        update(Project)
+        .where(Project.id == project_id)
+        .values(is_completed=is_completed)
+    )
+    await db.commit()
     
     return is_completed
 
@@ -181,6 +180,12 @@ async def delete_place_from_project(db: AsyncSession, db_place: Place) -> None:
     project_id = db_place.project_id
     await db.delete(db_place)
     await db.commit()
+
+    # Fetch project and refresh relationship to prevent stale cache in same session
+    proj_result = await db.execute(select(Project).filter(Project.id == project_id))
+    project = proj_result.scalar_one_or_none()
+    if project:
+        await db.refresh(project, ["places"])
 
     # Recalculate completeness after deletion
     await recalculate_project_completeness(db, project_id)

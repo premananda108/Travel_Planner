@@ -24,12 +24,12 @@ async def test_auth_required(client):
     assert res.status_code == status.HTTP_200_OK
 
 
-# --- PROJECT CRUD TESTS ---
+# --- PROJECT CRUD TESTS (EMPTY CREATION) ---
 
 @pytest.mark.asyncio
-async def test_project_crud(client):
-    """Test standard project lifecycle (create, read, update, delete)."""
-    # 1. Create project
+async def test_project_crud_empty(client):
+    """Test standard project lifecycle with empty creation (no initial places)."""
+    # 1. Create empty project
     payload = {
         "name": "European Tour",
         "description": "Visiting capitals in Europe",
@@ -66,7 +66,7 @@ async def test_project_crud(client):
     assert res.status_code == status.HTTP_200_OK
     assert len(res.json()) == 1
 
-    # 5. Delete project
+    # 5. Delete empty project
     res = await client.delete(f"/api/projects/{project_id}", auth=AUTH)
     assert res.status_code == status.HTTP_204_NO_CONTENT
 
@@ -84,7 +84,7 @@ async def test_create_project_with_places(client):
         "name": "Art Tour",
         "places": ["1001", "1002", "1003"]
     }
-    res = await client.post("/api/projects/with-places", json=payload, auth=AUTH)
+    res = await client.post("/api/projects", json=payload, auth=AUTH)
     assert res.status_code == status.HTTP_201_CREATED
     data = res.json()
     assert data["name"] == "Art Tour"
@@ -94,15 +94,17 @@ async def test_create_project_with_places(client):
     assert data["is_completed"] is False
 
 
+# --- CREATE PROJECT VALIDATION ---
+
 @pytest.mark.asyncio
-async def test_create_project_with_places_validation(client):
+async def test_create_project_validation(client):
     """Test schema and API validations during creation with places."""
     # 1. Invalid external place ID
     payload = {
         "name": "Invalid Art Tour",
         "places": ["1001", "invalid"]
     }
-    res = await client.post("/api/projects/with-places", json=payload, auth=AUTH)
+    res = await client.post("/api/projects", json=payload, auth=AUTH)
     assert res.status_code == status.HTTP_404_NOT_FOUND
 
     # 2. Too many places (>10)
@@ -110,7 +112,7 @@ async def test_create_project_with_places_validation(client):
         "name": "Overloaded Tour",
         "places": [str(i) for i in range(1, 12)]
     }
-    res = await client.post("/api/projects/with-places", json=payload, auth=AUTH)
+    res = await client.post("/api/projects", json=payload, auth=AUTH)
     assert res.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert "between 1 and 10 places" in res.text
 
@@ -119,18 +121,18 @@ async def test_create_project_with_places_validation(client):
         "name": "Duplicate Tour",
         "places": ["1001", "1001"]
     }
-    res = await client.post("/api/projects/with-places", json=payload, auth=AUTH)
+    res = await client.post("/api/projects", json=payload, auth=AUTH)
     assert res.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert "Duplicate external place IDs" in res.text
 
-    # 4. Too few places (<1)
+    # 4. If places list is provided, it cannot be empty (min 1 place)
     payload = {
         "name": "Empty Tour",
         "places": []
     }
-    res = await client.post("/api/projects/with-places", json=payload, auth=AUTH)
+    res = await client.post("/api/projects", json=payload, auth=AUTH)
     assert res.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
-    assert "at least 1 item" in res.text
+    assert "between 1 and 10 places" in res.text
 
 
 # --- ADD PLACES & LIMITS ---
@@ -157,7 +159,7 @@ async def test_add_place_to_existing_project(client):
     res = await client.post(f"/api/projects/{proj_id}/places", json={"external_id": "invalid"}, auth=AUTH)
     assert res.status_code == status.HTTP_404_NOT_FOUND
 
-    # 4. Fill project up to 10 places
+    # 4. Fill project up to 10 places (we have 2001, add 9 more: 2002-2010)
     for idx in range(2, 11):
         res = await client.post(f"/api/projects/{proj_id}/places", json={"external_id": str(2000 + idx)}, auth=AUTH)
         assert res.status_code == status.HTTP_201_CREATED
@@ -176,7 +178,7 @@ async def test_get_places_for_project(client):
         "name": "Read Places Tour",
         "places": ["1001", "1002"]
     }
-    res = await client.post("/api/projects/with-places", json=payload, auth=AUTH)
+    res = await client.post("/api/projects", json=payload, auth=AUTH)
     proj_id = res.json()["id"]
     place1_id = res.json()["places"][0]["id"]
 
@@ -209,7 +211,7 @@ async def test_completeness_and_deletion_rules(client):
     """
     # 1. Create a project with 2 places
     res = await client.post(
-        "/api/projects/with-places",
+        "/api/projects",
         json={"name": "Dual Tour", "places": ["4001", "4002"]},
         auth=AUTH
     )
@@ -272,7 +274,7 @@ async def test_completeness_and_deletion_rules(client):
     res = await client.get(f"/api/projects/{proj_id}", auth=AUTH)
     assert res.json()["is_completed"] is False
 
-    # 7. Delete the new unvisited place
+    # 7. Delete the new unvisited place (leaves 2 places remaining)
     res = await client.delete(
         f"/api/projects/{proj_id}/places/{new_place['id']}",
         auth=AUTH
@@ -282,3 +284,22 @@ async def test_completeness_and_deletion_rules(client):
     # Project completeness should recalculate and go back to True (only place1 and place2 remain, both visited)
     res = await client.get(f"/api/projects/{proj_id}", auth=AUTH)
     assert res.json()["is_completed"] is True
+
+    # 8. Delete place2 (leaving only place1). This is allowed since empty/single states are valid.
+    res = await client.delete(
+        f"/api/projects/{proj_id}/places/{place2['id']}",
+        auth=AUTH
+    )
+    assert res.status_code == status.HTTP_204_NO_CONTENT
+
+    # 9. Delete the last remaining place (place1). The project is now empty (0 places).
+    res = await client.delete(
+        f"/api/projects/{proj_id}/places/{place1['id']}",
+        auth=AUTH
+    )
+    assert res.status_code == status.HTTP_204_NO_CONTENT
+
+    # Verify project is empty and is_completed is False (no places)
+    res = await client.get(f"/api/projects/{proj_id}", auth=AUTH)
+    assert res.json()["is_completed"] is False
+    assert len(res.json()["places"]) == 0

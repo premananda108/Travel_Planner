@@ -36,7 +36,7 @@
       "name": "Projects",
       "item": [
         {
-          "name": "Create Project (Empty)",
+          "name": "Create Project (Fails - No Places)",
           "request": {
             "method": "POST",
             "header": [
@@ -48,7 +48,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Summer Vacation in Chicago\",\n  \"description\": \"Visiting the best museums and parks\",\n  \"start_date\": \"2026-07-15\"\n}"
+              "raw": "{\n  \"name\": \"Summer Vacation in Chicago\",\n  \"description\": \"Visiting the best museums and parks\",\n  \"start_date\": \"2026-07-15\",\n  \"places\": []\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/projects",
@@ -64,7 +64,7 @@
           "response": []
         },
         {
-          "name": "Create Project with Places",
+          "name": "Create Project",
           "request": {
             "method": "POST",
             "header": [
@@ -79,14 +79,13 @@
               "raw": "{\n  \"name\": \"Chicago Art Expedition\",\n  \"description\": \"A curated trip to view famous artworks\",\n  \"start_date\": \"2026-08-01\",\n  \"places\": [\n    \"27992\",\n    \"129884\",\n    \"16568\"\n  ]\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/projects/with-places",
+              "raw": "{{base_url}}/api/projects",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
-                "projects",
-                "with-places"
+                "projects"
               ]
             },
             "description": "Creates a project and imports places from the Art Institute of Chicago API in one request. External IDs are validated."
